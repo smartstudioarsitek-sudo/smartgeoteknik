@@ -72,6 +72,55 @@ with tab1:
     SF_guling = M_tahan / M_guling if M_guling > 0 else 999
     SF_geser = (W_wall * g_mu) / P_total if P_total > 0 else 999
 
+
+    # --- TAMBAHAN: CEK DAYA DUKUNG TANAH (SNI 8460) ---
+    # 1. Hitung Eksentrisitas (e)
+    # Lokasi resultan gaya dari titik guling (Toe)
+    # X_resultan = (Momen Tahan - Momen Guling) / Total Gaya Vertikal
+    Total_V = W_wall # (Jika nanti ada Uplift, kurangi di sini)
+    X_res = (M_tahan - M_guling) / Total_V
+    
+    # Eksentrisitas (jarak resultan dari as tengah dinding)
+    e = (g_b / 2) - X_res
+    
+    # Cek Syarat Eksentrisitas (Harus < B/6 agar seluruh alas menapak)
+    e_max = g_b / 6
+    
+    # 2. Hitung Tegangan Tanah Maksimum (q_max)
+    # Rumus Meyerhof / Terzaghi umum
+    if abs(e) <= e_max:
+        q_max = (Total_V / g_b) * (1 + (6 * abs(e) / g_b))
+        q_min = (Total_V / g_b) * (1 - (6 * abs(e) / g_b))
+    else:
+        # Jika eksentrisitas besar, tegangan jadi tidak linear (bahaya)
+        q_max = (2 * Total_V) / (3 * (g_b/2 - e)) # Rumus pendekatan efektif
+        q_min = 0 # Terjadi tarikan (lift off)
+
+    # 3. Daya Dukung Izin Tanah (Q_allow)
+    # Kita butuh input baru: Kapasitas Dukung Tanah Dasar (q_ult) dari user
+    # Atau kita pakai Terzaghi simpel: q_ult = c.Nc + q.Nq + 0.5.gamma.B.Ny
+    # Untuk simpelnya di aplikasi ini, kita minta user input Q_izin tanah saja.
+
+    st.write("---")
+    st.subheader("3. Cek Daya Dukung Tanah (Bearing Capacity)")
+    
+    col_daya1, col_daya2 = st.columns(2)
+    with col_daya1:
+        q_izin_input = st.number_input("Daya Dukung Izin Tanah (Qa) [kN/m2]", value=150.0, help="Data dari Sondir/Lab")
+        
+    with col_daya2:
+        st.metric("Tegangan Tanah Terjadi (Qmax)", f"{q_max:.2f} kN/m2")
+    
+    # Cek Safety
+    if q_max <= q_izin_input:
+        st.success(f"✅ AMAN (Qmax < Qa)")
+    else:
+        st.error(f"❌ TIDAK AMAN (Tanah Dasar Ambles!)")
+        st.caption("Solusi: Perlebar Lebar Bawah (b)")
+
+    # Peringatan Eksentrisitas
+    if e > e_max:
+        st.warning(f"⚠️ Peringatan: Resultan gaya keluar dari kern (e > B/6). Sebagian dasar dinding terangkat!")
     with col_output:
         st.subheader("📊 Hasil Analisis")
         
@@ -236,3 +285,4 @@ with tab3:
         ax3.legend()
         ax3.set_title("Visualisasi Lereng & Bidang Longsor")
         st.pyplot(fig3)
+
